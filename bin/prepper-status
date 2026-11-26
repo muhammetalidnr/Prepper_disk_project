@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+# PrepperPi: portalın gösterdiği /status.json dosyasını üretir (systemd timer ile dakikada bir).
+set -euo pipefail
+CONF=${PREPPER_CONF:-/etc/prepper.conf}
+DATA_DIR=/srv/prepper
+WIFI_IFACE=wlan0
+WIFI_SSID=PrepperPi
+# shellcheck source=/dev/null
+[[ -r $CONF ]] && . "$CONF"
+OUT=${STATUS_OUT:-/var/www/prepper/status.json}
+
+temp=$(awk '{printf "%.1f", $1/1000}' /sys/class/thermal/thermal_zone0/temp 2>/dev/null || echo null)
+read -r mem_total mem_avail < <(awk '/^MemTotal:/{t=$2} /^MemAvailable:/{a=$2} END{print t*1024, a*1024}' /proc/meminfo)
+read -r disk_total disk_free < <(df --output=size,avail -B1 "$DATA_DIR" 2>/dev/null | tail -1 || echo "0 0")
+uptime_s=$(cut -d. -f1 /proc/uptime)
+zims=$(find "$DATA_DIR/zim" -maxdepth 1 -name '*.zim' 2>/dev/null | wc -l)
+maps=$(find "$DATA_DIR/maps" -maxdepth 1 -name '*.pmtiles' 2>/dev/null | wc -l)
+files=$(find "$DATA_DIR/files" -type f 2>/dev/null | wc -l)
+clients=0
+lease=/var/lib/NetworkManager/dnsmasq-$WIFI_IFACE.leases
+[[ -r $lease ]] && clients=$(wc -l <"$lease")
+throttled=null
+command -v vcgencmd >/dev/null && throttled="\"$(vcgencmd get_throttled 2>/dev/null | cut -d= -f2)\""
+ssid=$(printf '%s' "$WIFI_SSID" | sed 's/\\/\\\\/g; s/"/\\"/g')
+
+tmp="$OUT.tmp"
+cat >"$tmp" <<JSON
+{"time":$(date +%s),"uptime_s":$uptime_s,"temp_c":$temp,"mem_total":$mem_total,"mem_avail":$mem_avail,"disk_total":$disk_total,"disk_free":$disk_free,"zims":$zims,"maps":$maps,"files":$files,"clients":$clients,"throttled":$throttled,"ssid":"$ssid"}
+JSON
+chmod 644 "$tmp"
+mv -f "$tmp" "$OUT"

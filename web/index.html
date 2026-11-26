@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PrepperPi</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <h1>PrepperPi <span class="tag">çevrimdışı bilgi merkezi</span></h1>
+    <p class="sub">İnternet olmadan çalışır. Bu ağa bağlı herkes içeriğe tarayıcıdan ulaşabilir.</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <form id="search" class="search" action="/wiki/search" method="get">
+    <select name="books.name" id="search-book" aria-label="Aranacak kaynak"></select>
+    <input type="search" name="pattern" placeholder="Ara… (ör. su arıtma, kırık, deprem)" required>
+    <button type="submit">Ara</button>
+  </form>
+
+  <section class="tiles">
+    <a class="tile" href="/rehber/">
+      <span class="ico">⛑</span><b>Acil durum rehberi</b>
+      <small>Acil numaralar, deprem çantası, temel kontrol listeleri</small>
+    </a>
+    <a class="tile" href="/wiki/">
+      <span class="ico">📚</span><b>Kütüphane</b>
+      <small id="t-zims">Wikipedia, tıp, onarım kılavuzları…</small>
+    </a>
+    <a class="tile" href="/maps/">
+      <span class="ico">🗺</span><b>Haritalar</b>
+      <small id="t-maps">Çevrimdışı sokak haritası</small>
+    </a>
+    <a class="tile" href="/files/">
+      <span class="ico">📁</span><b>Dosyalar</b>
+      <small id="t-files">PDF, kitap, belge</small>
+    </a>
+  </section>
+
+  <section>
+    <h2>Kaynaklar</h2>
+    <ul id="books" class="books"><li class="muted">Yükleniyor…</li></ul>
+  </section>
+
+  <section>
+    <h2>Sistem</h2>
+    <dl id="status" class="status"><div class="muted">Durum bilgisi yok.</div></dl>
+  </section>
+</main>
+
+<footer class="wrap muted">Raspberry Pi 4 üzerinde çalışır · <a href="http://prepper.lan/">prepper.lan</a></footer>
+<script src="/app.js"></script>
+</body>
+</html>

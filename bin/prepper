@@ -1,0 +1,394 @@
+#!/usr/bin/env bash
+# prepper — PrepperPi yönetim aracı
+#
+#   prepper status                     Sistem ve içerik durumu
+#   prepper content list               İndirilebilir içerik kataloğu
+#   prepper content install KEY...     İçerik indir (ör. wiki-tr-nopic wikimed-en)
+#   prepper content remove KEY|DOSYA   İçerik sil
+#   prepper content update             Kurulu içerikleri en yeni sürüme yükselt
+#   prepper maps install [BÖLGE|W,S,E,N] [MAXZOOM]
+#                                      Çevrimdışı harita indir (varsayılan: turkiye, z13)
+#   prepper apply                      /etc/prepper.conf değişikliklerini uygula
+#
+set -euo pipefail
+
+PREFIX=${PREFIX:-/opt/prepperpi}
+CONF=${PREPPER_CONF:-/etc/prepper.conf}
+WEB_ROOT=/var/www/prepper
+KIWIX_MIRROR=${KIWIX_MIRROR:-https://download.kiwix.org/zim}
+PROTOMAPS_BUILDS=${PROTOMAPS_BUILDS:-https://build.protomaps.com}
+
+# Varsayılanlar (CONF bunları ezer)
+DATA_DIR=/srv/prepper
+WIFI_IFACE=wlan0
+WIFI_SSID=PrepperPi
+WIFI_PASS=
+WIFI_COUNTRY=TR
+WIFI_CHANNEL=6
+AP_IP=10.42.0.1
+CAPTIVE=1
+KIWIX_PORT=8080
+MAP_LANG="tr"
+# shellcheck source=/dev/null
+[[ -r $CONF ]] && . "$CONF"
+
+ZIM_DIR=$DATA_DIR/zim
+LIBRARY=$DATA_DIR/library.xml
+CATALOG=$PREFIX/config/catalog.txt
+
+c_ok=$'\e[32m'; c_warn=$'\e[33m'; c_err=$'\e[31m'; c_dim=$'\e[2m'; c_off=$'\e[0m'
+[[ -t 1 ]] || { c_ok=; c_warn=; c_err=; c_dim=; c_off=; }
+info() { printf '%s==>%s %s\n' "$c_ok" "$c_off" "$*"; }
+warn() { printf '%s!!%s  %s\n' "$c_warn" "$c_off" "$*" >&2; }
+die()  { printf '%sHATA:%s %s\n' "$c_err" "$c_off" "$*" >&2; exit 1; }
+need_root() { [[ $EUID -eq 0 ]] || die "Bu komut root gerektirir: sudo prepper $*"; }
+
+human() { numfmt --to=iec --suffix=B "${1:-0}" 2>/dev/null || echo "${1}B"; }
+free_bytes() { df --output=avail -B1 "$1" | tail -1 | tr -d ' '; }
+
+# Şablondaki @DEĞİŞKEN@ yer tutucularını doldur
+render() {
+  sed -e "s|@DATA_DIR@|$DATA_DIR|g" \
+      -e "s|@AP_IP@|$AP_IP|g" \
+      -e "s|@KIWIX_PORT@|$KIWIX_PORT|g" "$1"
+}
+
+# ---------------------------------------------------------------- Kiwix kütüphanesi
+library_rebuild() {
+  local tmp n=0 z
+  tmp=$(mktemp "$DATA_DIR/.library.XXXXXX.xml")
+  rm -f "$tmp"
+  shopt -s nullglob
+  for z in "$ZIM_DIR"/*.zim; do
+    if kiwix-manage "$tmp" add "$z" >/dev/null 2>&1; then
+      n=$((n + 1))
+    else
+      warn "Kütüphaneye eklenemedi (bozuk/yarım dosya?): $z"
+    fi
+  done
+  shopt -u nullglob
+  # Boş kütüphane de geçerli olsun ki kiwix-serve başlayabilsin
+  [[ -s $tmp ]] || printf '<?xml version="1.0" encoding="UTF-8" ?>\n<library version="20110515">\n</library>\n' >"$tmp"
+  chmod 644 "$tmp"
+  mv -f "$tmp" "$LIBRARY"
+  echo "$n"
+}
+
+cmd_library_ensure() {
+  mkdir -p "$ZIM_DIR"
+  local zims books
+  zims=$(find "$ZIM_DIR" -maxdepth 1 -name '*.zim' | wc -l)
+  books=0
+  [[ -s $LIBRARY ]] && books=$(grep -c '<book ' "$LIBRARY" || true)
+  if [[ ! -s $LIBRARY || $zims -ne $books ]]; then
+    library_rebuild >/dev/null
+  fi
+}
+
+kiwix_reload() {
+  library_rebuild >/dev/null
+  [[ $EUID -eq 0 ]] && chown -R prepper:prepper "$DATA_DIR/zim" "$LIBRARY" 2>/dev/null || true
+  systemctl restart kiwix-serve 2>/dev/null || true
+}
+
+# ---------------------------------------------------------------- İçerik
+catalog_lookup() { # KEY -> "dir|prefix|desc"
+  awk -F'|' -v k="$1" '!/^#/ && $1==k {print $2"|"$3"|"$4; f=1} END{exit !f}' "$CATALOG"
+}
+
+resolve_latest() { # dir prefix -> dosya adı
+  local dir=$1 prefix=$2
+  curl -fsSL --retry 3 "$KIWIX_MIRROR/$dir/" \
+    | grep -oE "href=\"${prefix}_[0-9]{4}-[0-9]{2}\.zim\"" \
+    | sed -E 's/^href="|"$//g' | sort -uV | tail -1
+}
+
+remote_size() {
+  curl -fsSIL --retry 2 "$1" | tr -d '\r' | awk 'tolower($1)=="content-length:"{s=$2} END{print s+0}'
+}
+
+installed_for_prefix() { # prefix -> kurulu dosya(lar)
+  find "$ZIM_DIR" -maxdepth 1 -regextype posix-extended \
+    -regex ".*/${1}_[0-9]{4}-[0-9]{2}\.zim" -printf '%f\n' 2>/dev/null | sort -V
+}
+
+cmd_content_list() {
+  printf '%-18s %-10s %s\n' ANAHTAR DURUM AÇIKLAMA
+  local key dir prefix desc cur
+  while IFS='|' read -r key dir prefix desc; do
+    [[ -z $key || $key == \#* ]] && continue
+    cur=$(installed_for_prefix "$prefix" | tail -1)
+    if [[ -n $cur ]]; then
+      printf '%-18s %s%-10s%s %s %s(%s)%s\n' "$key" "$c_ok" kurulu "$c_off" "$desc" "$c_dim" "$cur" "$c_off"
+    else
+      printf '%-18s %-10s %s\n' "$key" - "$desc"
+    fi
+  done <"$CATALOG"
+  echo
+  echo "Boyutu görmek ve indirmek için: sudo prepper content install ANAHTAR"
+  echo "Katalog dışı bir ZIM: dosyayı $ZIM_DIR içine kopyalayıp 'sudo prepper content reload' çalıştırın."
+}
+
+download_zim() { # dir prefix -> 0 indirildi / 2 zaten güncel
+  local dir=$1 prefix=$2 name url size free part
+  name=$(resolve_latest "$dir" "$prefix") || true
+  [[ -n $name ]] || { warn "Sunucuda bulunamadı: $dir/$prefix (internet bağlantısı?)"; return 1; }
+  if [[ -f $ZIM_DIR/$name ]]; then
+    info "Zaten güncel: $name"
+    return 2
+  fi
+  url="$KIWIX_MIRROR/$dir/$name"
+  size=$(remote_size "$url")
+  part="$ZIM_DIR/$name.part"
+  free=$(free_bytes "$ZIM_DIR")
+  local have=0; [[ -f $part ]] && have=$(stat -c %s "$part")
+  if (( size > 0 && size - have + 256*1024*1024 > free )); then
+    die "Yer yok: $name $(human "$size") gerekiyor, boş alan $(human "$free")."
+  fi
+  info "İndiriliyor: $name ($(human "$size"))  — kesilirse aynı komutla kaldığı yerden devam eder"
+  wget -c --tries=20 --waitretry=10 --read-timeout=60 --progress=dot:giga -O "$part" "$url"
+  if (( size > 0 )) && [[ $(stat -c %s "$part") -ne $size ]]; then
+    die "İndirme eksik kaldı: $part — komutu tekrar çalıştırın."
+  fi
+  mv -f "$part" "$ZIM_DIR/$name"
+  chown prepper:prepper "$ZIM_DIR/$name" 2>/dev/null || true
+  info "Tamam: $name"
+}
+
+cmd_content_install() {
+  need_root content install
+  [[ $# -gt 0 ]] || die "Kullanım: prepper content install ANAHTAR... (liste: prepper content list)"
+  mkdir -p "$ZIM_DIR"
+  local key meta dir prefix _desc changed=0 rc
+  for key in "$@"; do
+    meta=$(catalog_lookup "$key") || die "Bilinmeyen içerik: $key (prepper content list)"
+    IFS='|' read -r dir prefix _desc <<<"$meta"
+    rc=0; download_zim "$dir" "$prefix" || rc=$?
+    [[ $rc -eq 0 ]] && changed=1
+    [[ $rc -eq 1 ]] && warn "Atlandı: $key"
+  done
+  if (( changed )); then
+    info "Kiwix kütüphanesi yenileniyor..."
+    kiwix_reload
+  fi
+  cmd_status_short
+}
+
+cmd_content_update() {
+  need_root content update
+  local key dir prefix _desc old changed=0 rc
+  while IFS='|' read -r key dir prefix _desc; do
+    [[ -z $key || $key == \#* ]] && continue
+    old=$(installed_for_prefix "$prefix")
+    [[ -n $old ]] || continue
+    info "Kontrol ediliyor: $key"
+    rc=0; download_zim "$dir" "$prefix" || rc=$?
+    if [[ $rc -eq 0 ]]; then
+      changed=1
+      # yeni sürüm indi -> eskileri sil
+      local newest f
+      newest=$(installed_for_prefix "$prefix" | tail -1)
+      for f in $old; do [[ $f != "$newest" ]] && rm -f "$ZIM_DIR/$f"; done
+    fi
+  done <"$CATALOG"
+  (( changed )) && kiwix_reload
+  info "Güncelleme bitti."
+}
+
+cmd_content_remove() {
+  need_root content remove
+  [[ $# -eq 1 ]] || die "Kullanım: prepper content remove ANAHTAR|DOSYA.zim"
+  local meta prefix files
+  if meta=$(catalog_lookup "$1"); then
+    prefix=$(cut -d'|' -f2 <<<"$meta")
+    files=$(installed_for_prefix "$prefix")
+  else
+    files=$(basename "$1")
+    [[ -f $ZIM_DIR/$files ]] || die "Bulunamadı: $1"
+  fi
+  [[ -n $files ]] || die "Kurulu değil: $1"
+  local f; for f in $files; do rm -f "$ZIM_DIR/$f"; info "Silindi: $f"; done
+  kiwix_reload
+}
+
+# ---------------------------------------------------------------- Harita
+pmtiles_bin() {
+  command -v pmtiles >/dev/null && { command -v pmtiles; return; }
+  local arch url tmp
+  case $(uname -m) in
+    aarch64|arm64) arch=arm64 ;;
+    armv7l|armv6l) arch=armv6 ;;
+    x86_64) arch=x86_64 ;;
+    *) die "Desteklenmeyen mimari: $(uname -m)" ;;
+  esac
+  url=$(curl -fsSL https://api.github.com/repos/protomaps/go-pmtiles/releases/latest \
+        | grep -oE "https://[^\"]+_Linux_${arch}\.tar\.gz" | head -1) \
+    || die "pmtiles aracı bulunamadı (internet bağlantısı?)"
+  tmp=$(mktemp -d)
+  curl -fsSL "$url" | tar -xz -C "$tmp"
+  install -m 755 "$tmp/pmtiles" /usr/local/bin/pmtiles
+  rm -rf "$tmp"
+  echo /usr/local/bin/pmtiles
+}
+
+latest_planet_build() {
+  local i d
+  for i in $(seq 0 14); do
+    d=$(date -u -d "-$i day" +%Y%m%d)
+    if curl -fsI "$PROTOMAPS_BUILDS/$d.pmtiles" >/dev/null 2>&1; then
+      echo "$PROTOMAPS_BUILDS/$d.pmtiles"; return 0
+    fi
+  done
+  return 1
+}
+
+map_assets() {
+  local dest=$DATA_DIR/map-assets tmp
+  if [[ -d $dest/fonts && -d $dest/sprites ]]; then return 0; fi
+  info "Harita yazı tipleri ve simgeleri indiriliyor..."
+  tmp=$(mktemp -d)
+  curl -fsSL -o "$tmp/a.zip" https://github.com/protomaps/basemaps-assets/archive/refs/heads/main.zip
+  unzip -q "$tmp/a.zip" -d "$tmp"
+  mkdir -p "$dest"
+  rm -rf "$dest/fonts" "$dest/sprites"
+  mv "$tmp"/basemaps-assets-main/fonts "$tmp"/basemaps-assets-main/sprites "$dest/"
+  rm -rf "$tmp"
+}
+
+cmd_maps_install() {
+  need_root maps install
+  local region=${1:-turkiye} maxzoom=${2:-13} bbox name pm src out
+  case $region in
+    turkiye|turkey) bbox="25.6,35.7,44.9,42.2"; name=turkiye ;;
+    istanbul)       bbox="27.9,40.75,29.95,41.6"; name=istanbul ;;
+    ankara)         bbox="32.2,39.6,33.3,40.2"; name=ankara ;;
+    izmir)          bbox="26.2,37.8,27.9,39.2"; name=izmir ;;
+    *,*,*,*)        bbox=$region; name=ozel ;;
+    *) die "Bölge: turkiye | istanbul | ankara | izmir | W,S,E,N (boylam,enlem)" ;;
+  esac
+  [[ $maxzoom =~ ^[0-9]+$ && $maxzoom -le 15 ]] || die "MAXZOOM 0-15 arası olmalı"
+  mkdir -p "$DATA_DIR/maps"
+  pm=$(pmtiles_bin)
+  src=$(latest_planet_build) || die "Protomaps dünya haritası bulunamadı (internet bağlantısı?)"
+  out="$DATA_DIR/maps/$name.pmtiles"
+  info "Kaynak: $src"
+  info "Bölge $name [$bbox], yakınlaştırma 0-$maxzoom çıkarılıyor..."
+  "$pm" extract "$src" "$out.part" --bbox="$bbox" --maxzoom="$maxzoom" --download-threads=4
+  mv -f "$out.part" "$out"
+  map_assets
+  # Haritalar sayfası hangi dosyaları göstereceğini buradan okur
+  find "$DATA_DIR/maps" -maxdepth 1 -name '*.pmtiles' -printf '%f\n' | sort \
+    | awk 'BEGIN{printf "["} {printf "%s\"%s\"", (NR>1?",":""), $0} END{print "]"}' >"$DATA_DIR/maps/index.json"
+  chown -R prepper:prepper "$DATA_DIR/maps" "$DATA_DIR/map-assets"
+  info "Harita hazır: $out ($(human "$(stat -c %s "$out")"))"
+}
+
+# ---------------------------------------------------------------- Ağ / yapılandırma
+cmd_apply() {
+  need_root apply
+  [[ -z $WIFI_PASS || ${#WIFI_PASS} -ge 8 ]] || die "WIFI_PASS en az 8 karakter olmalı"
+
+  # nginx + kiwix + dnsmasq yapılandırmalarını yeniden üret
+  render "$PREFIX/config/nginx-prepper.conf" >/etc/nginx/sites-available/prepper
+  ln -sf /etc/nginx/sites-available/prepper /etc/nginx/sites-enabled/prepper
+  rm -f /etc/nginx/sites-enabled/default
+  render "$PREFIX/config/kiwix-serve.service" >/etc/systemd/system/kiwix-serve.service
+
+  mkdir -p /etc/NetworkManager/dnsmasq-shared.d
+  render "$PREFIX/config/prepper-dnsmasq.conf" >/etc/NetworkManager/dnsmasq-shared.d/prepper.conf
+  if [[ $CAPTIVE == 1 ]]; then
+    render "$PREFIX/config/captive-dnsmasq.conf" >/etc/NetworkManager/dnsmasq-shared.d/prepper-captive.conf
+  else
+    rm -f /etc/NetworkManager/dnsmasq-shared.d/prepper-captive.conf
+  fi
+
+  # Wi-Fi ülke kodu (yoksa kablosuz kapalı kalır)
+  command -v raspi-config >/dev/null && raspi-config nonint do_wifi_country "$WIFI_COUNTRY" || true
+  command -v iw >/dev/null && iw reg set "$WIFI_COUNTRY" 2>/dev/null || true
+  rfkill unblock wifi 2>/dev/null || true
+
+  # NetworkManager erişim noktası
+  nmcli connection delete prepper-ap >/dev/null 2>&1 || true
+  local sec=()
+  [[ -n $WIFI_PASS ]] && sec=(wifi-sec.key-mgmt wpa-psk wifi-sec.proto rsn wifi-sec.pairwise ccmp wifi-sec.psk "$WIFI_PASS")
+  nmcli connection add type wifi ifname "$WIFI_IFACE" con-name prepper-ap autoconnect yes \
+    connection.autoconnect-priority 100 ssid "$WIFI_SSID" \
+    802-11-wireless.mode ap 802-11-wireless.band bg 802-11-wireless.channel "$WIFI_CHANNEL" \
+    802-11-wireless.powersave 2 \
+    ipv4.method shared ipv4.addresses "$AP_IP/24" ipv6.method disabled "${sec[@]}" >/dev/null
+
+  mkdir -p "$WEB_ROOT/maps"
+  printf '{"lang":"%s"}\n' "$MAP_LANG" >"$WEB_ROOT/maps/config.json"
+
+  systemctl daemon-reload
+  nginx -t -q
+  systemctl enable --now nginx kiwix-serve prepper-status.timer >/dev/null 2>&1
+  systemctl reload nginx
+  systemctl restart kiwix-serve
+  local current
+  current=$(nmcli -g GENERAL.CONNECTION device show "$WIFI_IFACE" 2>/dev/null || true)
+  if [[ -n $current && $current != prepper-ap && ${PREPPER_FORCE_AP:-0} != 1 ]]; then
+    warn "$WIFI_IFACE şu an '$current' ağına bağlı; bağlantınızı koparmamak için erişim noktası"
+    warn "şimdi açılmadı. Yeniden başlatınca (sudo reboot) otomatik açılır."
+    warn "Hemen açmak için: sudo nmcli connection up prepper-ap"
+  else
+    nmcli connection up prepper-ap >/dev/null 2>&1 || warn "Erişim noktası açılamadı: journalctl -u NetworkManager"
+  fi
+  /usr/local/bin/prepper-status || true
+  info "Uygulandı. Ağ: '$WIFI_SSID'  Portal: http://$AP_IP/  (veya http://prepper.lan/)"
+}
+
+# ---------------------------------------------------------------- Durum
+cmd_status_short() {
+  local n; n=$(find "$ZIM_DIR" -maxdepth 1 -name '*.zim' 2>/dev/null | wc -l)
+  echo "Kurulu ZIM: $n   Boş alan: $(human "$(free_bytes "$DATA_DIR")")"
+}
+
+cmd_status() {
+  local temp mem svc
+  temp=$(awk '{printf "%.1f°C", $1/1000}' /sys/class/thermal/thermal_zone0/temp 2>/dev/null || echo ?)
+  mem=$(free -m | awk '/^Mem:/{printf "%d/%d MB (kullanılabilir %d MB)", $3, $2, $7}')
+  echo "PrepperPi  —  $(hostname)  —  sıcaklık $temp"
+  echo "Bellek     : $mem"
+  echo "Takas      : $(free -m | awk '/^Swap:/{printf "%d/%d MB", $3, $2}') (zram)"
+  echo "Veri       : $DATA_DIR  — $(df -h --output=used,size,avail "$DATA_DIR" | tail -1 | awk '{print $1" / "$2" (boş "$3")"}')"
+  for svc in nginx kiwix-serve; do
+    printf '%-11s: %s\n' "$svc" "$(systemctl is-active "$svc" 2>/dev/null || true)"
+  done
+  echo "Wi-Fi      : $WIFI_SSID — $(nmcli -t -f GENERAL.STATE connection show prepper-ap 2>/dev/null | cut -d: -f2 || echo '?')"
+  echo "İçerik     :"
+  local z
+  shopt -s nullglob
+  for z in "$ZIM_DIR"/*.zim; do printf '   %-50s %s\n' "$(basename "$z")" "$(human "$(stat -c %s "$z")")"; done
+  for z in "$DATA_DIR"/maps/*.pmtiles; do printf '   %-50s %s\n' "harita: $(basename "$z")" "$(human "$(stat -c %s "$z")")"; done
+  shopt -u nullglob
+}
+
+usage() { sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; }
+
+main() {
+  local cmd=${1:-help}; shift || true
+  case $cmd in
+    status) cmd_status ;;
+    content)
+      local sub=${1:-list}; shift || true
+      case $sub in
+        list) cmd_content_list ;;
+        install|add) cmd_content_install "$@" ;;
+        update|upgrade) cmd_content_update ;;
+        remove|rm|delete) cmd_content_remove "$@" ;;
+        reload) need_root content reload; kiwix_reload; cmd_status_short ;;
+        *) usage; exit 1 ;;
+      esac ;;
+    maps)
+      local sub=${1:-}; shift || true
+      [[ $sub == install ]] || { usage; exit 1; }
+      cmd_maps_install "$@" ;;
+    apply) cmd_apply ;;
+    library-ensure) cmd_library_ensure ;;
+    help|-h|--help) usage ;;
+    *) usage; exit 1 ;;
+  esac
+}
+
+main "$@"

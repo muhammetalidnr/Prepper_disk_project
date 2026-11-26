@@ -1,0 +1,73 @@
+:root {
+  --bg: #f6f4ef; --card: #ffffff; --fg: #1d1f1c; --muted: #6a6d66;
+  --line: #dedbd2; --accent: #b4441c; --accent-fg: #fff; --ok: #2f7d32; --warn: #b26a00;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161714; --card: #20221e; --fg: #ecebe6; --muted: #a2a49c;
+    --line: #34362f; --accent: #e0703f; --accent-fg: #111; --ok: #7cc47f; --warn: #f0b44c;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+a { color: var(--accent); }
+.wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
+.muted { color: var(--muted); }
+.top { border-bottom: 1px solid var(--line); background: var(--card); margin-bottom: 20px; }
+.top h1 { margin: 18px 0 2px; font-size: 1.6rem; letter-spacing: -.01em; }
+.top .tag { font-size: .8rem; font-weight: 500; color: var(--muted); margin-left: 6px; }
+.top .sub { margin: 0 0 16px; color: var(--muted); font-size: .95rem; }
+h2 { font-size: 1.05rem; margin: 28px 0 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+
+.search { display: flex; gap: 8px; flex-wrap: wrap; }
+.search select, .search input, .search button {
+  font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--card); color: var(--fg); min-height: 44px;
+}
+.search select { max-width: 100%; flex: 0 1 220px; }
+.search input { flex: 1 1 220px; min-width: 0; }
+.search button { background: var(--accent); color: var(--accent-fg); border: 0; font-weight: 600; padding: 10px 18px; }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 18px; }
+.tile {
+  display: flex; flex-direction: column; gap: 2px; padding: 16px; text-decoration: none; color: var(--fg);
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+}
+.tile:hover, .tile:focus-visible { border-color: var(--accent); }
+.tile .ico { font-size: 1.6rem; line-height: 1; margin-bottom: 6px; }
+.tile small { color: var(--muted); }
+
+.books { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.books li a {
+  display: flex; gap: 12px; align-items: center; padding: 10px 12px; text-decoration: none; color: var(--fg);
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+}
+.books img { width: 40px; height: 40px; border-radius: 6px; flex: none; }
+.books .t { font-weight: 600; }
+.books .d { color: var(--muted); font-size: .9rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+.status { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 0; }
+.status > div { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.status dt { font-size: .8rem; color: var(--muted); }
+.status dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.bar { height: 6px; background: var(--line); border-radius: 3px; margin-top: 6px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--ok); }
+.bar i.hi { background: var(--warn); }
+
+footer { padding: 32px 16px 24px; font-size: .85rem; }
+
+/* Rehber sayfası */
+.doc { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 4px 18px 14px; margin-bottom: 14px; }
+.doc h3 { margin: 14px 0 6px; }
+.doc ul { padding-left: 20px; margin: 6px 0; }
+.doc label { display: block; padding: 3px 0; }
+.big { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin: 10px 0; }
+.nums div { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.note { border-left: 3px solid var(--warn); padding: 6px 12px; color: var(--muted); }
+@media print { .top, footer, .search { display: none; } body { background: #fff; color: #000; } }

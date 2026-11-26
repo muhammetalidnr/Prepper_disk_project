@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Haritalar · PrepperPi</title>
+<link rel="stylesheet" href="/maps/vendor/maplibre-gl.css">
+<style>
+  html, body { margin: 0; height: 100%; font: 15px/1.4 system-ui, sans-serif; }
+  #map { position: absolute; inset: 0; }
+  .bar { position: absolute; top: 10px; left: 10px; right: 56px; display: flex; gap: 6px; flex-wrap: wrap; z-index: 2; }
+  .bar a, .bar select, .bar span {
+    background: #fff; color: #222; border: 1px solid #ccc; border-radius: 8px; padding: 6px 10px;
+    font: inherit; text-decoration: none; box-shadow: 0 1px 3px rgba(0,0,0,.15);
+  }
+  #msg { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; padding: 24px; text-align: center; background: #f6f4ef; color: #333; }
+  #msg code { background: #e7e3d9; padding: 2px 6px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="bar">
+  <a href="/">← Portal</a>
+  <select id="region" aria-label="Bölge" hidden></select>
+  <span id="coord" hidden></span>
+</div>
+<div id="msg"><div><h2>Henüz harita yok</h2><p>Pi üzerinde internet varken çalıştırın:<br><code>sudo prepper maps install turkiye</code></p></div></div>
+<script src="/maps/vendor/maplibre-gl.js"></script>
+<script src="/maps/vendor/pmtiles.js"></script>
+<script src="/maps/vendor/basemaps.js"></script>
+<script src="/maps/map.js"></script>
+</body>
+</html>

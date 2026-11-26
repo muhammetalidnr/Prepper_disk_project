@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Acil Durum Rehberi · PrepperPi</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <h1>Acil durum rehberi</h1>
+    <p class="sub"><a href="/">← Portal</a> · Ayrıntılı bilgi için kütüphanedeki tıp ve afet kaynaklarına bakın.</p>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="doc">
+    <h3>Acil numaralar (Türkiye)</h3>
+    <div class="nums">
+      <div><div class="big">112</div>Tüm acil durumlar: ambulans, itfaiye, polis, jandarma, AFAD</div>
+      <div><div class="big">114</div>Ulusal Zehir Danışma Merkezi</div>
+    </div>
+    <p class="note">Şebeke çökse bile 112 aranabilir olabilir; telefonunuz başka bir operatörün şebekesini acil çağrı için kullanabilir. SIM kartsız da denenebilir.</p>
+  </div>
+
+  <div class="doc">
+    <h3>Deprem anında: Çök – Kapan – Tutun</h3>
+    <ul>
+      <li><b>Çök:</b> Olduğun yerde yere çök, dengeni koru.</li>
+      <li><b>Kapan:</b> Sağlam bir masanın altına gir ya da başını ve enseni kollarınla koru.</li>
+      <li><b>Tutun:</b> Sarsıntı bitene kadar tutunduğun yerden ayrılma.</li>
+      <li>Merdiven, asansör ve balkon kullanma; sarsıntı sırasında dışarı koşma.</li>
+      <li>Sarsıntıdan sonra gaz, elektrik ve suyu kapat; artçılara hazırlıklı ol.</li>
+    </ul>
+  </div>
+
+  <div class="doc">
+    <h3>Mahsur kalırsan</h3>
+    <ul>
+      <li>Hareketini ve sesini idareli kullan, ağzını ve burnunu bir bezle ört.</li>
+      <li>Boru veya duvara düzenli aralıklarla vur; düdük çal. Sürekli bağırmak enerjini tüketir.</li>
+      <li>Kibrit veya çakmak yakma — gaz kaçağı olabilir.</li>
+    </ul>
+  </div>
+
+  <div class="doc">
+    <h3>İçme suyu</h3>
+    <ul>
+      <li>Güvenliğinden emin olmadığın suyu kaynat: <b>en az 1 dakika</b> fokur fokur kaynat (yüksek rakımda ~2000 m üstü: 3 dakika).</li>
+      <li>Bulanık suyu önce bekletip temiz bir bezden süz, sonra kaynat.</li>
+      <li>Kişi başı günlük en az 2–4 litre içme suyu planla.</li>
+    </ul>
+  </div>
+
+  <div class="doc">
+    <h3>Afet ve acil durum çantası</h3>
+    <p class="muted">İşaretlediklerin bu cihazın tarayıcısında saklanır.</p>
+    <div id="checklist"></div>
+    <p><button type="button" id="reset">Listeyi sıfırla</button></p>
+  </div>
+</main>
+
+<footer class="wrap muted">Bu sayfa genel bilgilendirme içindir; ilk yardım eğitimi yerine geçmez.</footer>
+
+<script>
+(function () {
+  var items = [
+    "Su (kişi başı en az 3 günlük)", "Bozulmayan yiyecek: konserve, kuru gıda, bisküvi", "Konserve açacağı",
+    "İlk yardım çantası", "Düzenli kullanılan ilaçlar ve reçete kopyaları", "El feneri ve yedek pil",
+    "Pilli veya kurmalı radyo", "Powerbank ve şarj kablosu", "Düdük", "Battaniye / termal örtü",
+    "Yedek kıyafet, sağlam ayakkabı, yağmurluk", "İş eldiveni, toz maskesi", "Islak mendil, hijyen malzemeleri, çöp poşeti",
+    "Nakit para", "Kimlik, tapu, sigorta belgelerinin kopyaları (su geçirmez poşette)", "Çakı / çok amaçlı alet",
+    "Kibrit veya çakmak (su geçirmez kapta)", "Yedek gözlük, işitme cihazı pili", "Bebek, yaşlı veya evcil hayvan ihtiyaçları",
+    "Aile iletişim planı ve buluşma noktası (kâğıda yazılı)"
+  ];
+  var KEY = "prepper-checklist", state = {};
+  try { state = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) {}
+  var box = document.getElementById("checklist");
+  items.forEach(function (t, i) {
+    var lab = document.createElement("label"), cb = document.createElement("input");
+    cb.type = "checkbox"; cb.checked = !!state[i];
+    cb.onchange = function () {
+      state[i] = cb.checked;
+      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    };
+    lab.appendChild(cb); lab.appendChild(document.createTextNode(" " + t));
+    box.appendChild(lab);
+  });
+  document.getElementById("reset").onclick = function () {
+    state = {};
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    Array.prototype.forEach.call(box.querySelectorAll("input"), function (c) { c.checked = false; });
+  };
+})();
+</script>
+</body>
+</html>

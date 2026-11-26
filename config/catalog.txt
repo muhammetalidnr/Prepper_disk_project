@@ -1,0 +1,15 @@
+# anahtar|kiwix-dizini|dosya-öneki|açıklama
+# Dosya adları ayda bir değişir; "prepper content" her zaman en yeni sürümü bulur.
+wiki-tr-mini|wikipedia|wikipedia_tr_all_mini|Türkçe Wikipedia — yalnızca giriş bölümleri, resimsiz (küçük)
+wiki-tr-nopic|wikipedia|wikipedia_tr_all_nopic|Türkçe Wikipedia — tam metin, resimsiz
+wiki-tr-maxi|wikipedia|wikipedia_tr_all_maxi|Türkçe Wikipedia — tam, resimli (büyük)
+wikimed-en|wikipedia|wikipedia_en_medicine_maxi|WikiMed — İngilizce tıp ansiklopedisi, resimli
+wikivoyage-en|wikivoyage|wikivoyage_en_all_maxi|Wikivoyage — İngilizce gezi rehberi
+wiktionary-tr|wiktionary|wiktionary_tr_all_maxi|Vikisözlük — Türkçe sözlük
+wikibooks-tr|wikibooks|wikibooks_tr_all_maxi|Vikikitap — Türkçe ders kitapları
+ifixit-en|ifixit|ifixit_en_all|iFixit — onarım kılavuzları (İngilizce)
+medicine-en|other|zimgit-medicine_en|Afet ve acil durum tıbbı kitapları (İngilizce)
+post-disaster-en|other|zimgit-post-disaster_en|Afet sonrası yaşam kaynakları (İngilizce)
+water-en|other|zimgit-water_en|Su temini ve arıtma (İngilizce)
+food-en|other|zimgit-food-preparation_en|Gıda hazırlama ve saklama (İngilizce)
+knots-en|other|zimgit-knots_en|Düğümler (İngilizce)

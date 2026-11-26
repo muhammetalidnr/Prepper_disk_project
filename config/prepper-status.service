@@ -1,0 +1,7 @@
+[Unit]
+Description=PrepperPi durum bilgisini güncelle
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/prepper-status
+Nice=10

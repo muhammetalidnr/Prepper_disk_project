@@ -1,0 +1,24 @@
+[Unit]
+Description=PrepperPi Kiwix sunucusu (çevrimdışı ansiklopediler)
+After=network.target local-fs.target
+RequiresMountsFor=@DATA_DIR@
+
+[Service]
+Type=simple
+User=prepper
+Group=prepper
+ExecStartPre=/usr/local/bin/prepper library-ensure
+ExecStart=/usr/local/bin/kiwix-serve --address=127.0.0.1 --port=@KIWIX_PORT@ --urlRootLocation=/wiki --threads=2 --monitorLibrary --library @DATA_DIR@/library.xml
+Restart=on-failure
+RestartSec=5
+# 1 GB RAM: kiwix'i sınırla ki sistem nefes alsın
+MemoryHigh=450M
+MemoryMax=650M
+Nice=5
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
