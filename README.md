@@ -81,6 +81,7 @@ sudo prepper content install wiki-tr-nopic    # en yeni sürümü bulur, boyutu 
 sudo prepper content update                   # kurulu her şeyi yeni aylık sürüme yükseltir, eskiyi siler
 sudo prepper content remove wiki-tr-nopic
 prepper status                                # RAM, sıcaklık, disk, servisler
+sudo prepper check                            # olası sorunları denetler
 ```
 
 - İndirmeler kesilirse aynı komut **kaldığı yerden devam eder**.
@@ -144,6 +145,28 @@ sudo mount -a && sudo ./install.sh          # klasörleri yeniden oluşturur
 | `bin/prepper-status` | Portal için durum JSON'u |
 | `config/` | nginx, systemd, dnsmasq şablonları, içerik kataloğu |
 | `web/` | Portal, harita ve rehber sayfaları |
+
+## Sorun giderme
+
+Önce her zaman: `sudo prepper check` — sorunları tek tek listeler.
+
+| Belirti | Neden / Çözüm |
+|---|---|
+| "İnternet yok (… çözümlenemedi)" | Pi erişim noktası modundayken Wi-Fi'dan internete çıkamaz. **Ethernet kablosu** takın. |
+| "Güvenli bağlantı kurulamadı / sertifika" | Pi'de pilli saat yok; uzun süre kapalı kaldıysa saat geride. `sudo timedatectl set-ntp true`, 1-2 dk bekleyin, `date` ile kontrol edin. |
+| İndirme yarıda kesildi | Aynı komutu tekrar çalıştırın; **kaldığı yerden devam eder**. Bitince SHA-256 ile doğrulanır, bozuksa silinip uyarılır. |
+| "Yer yok" | `prepper status` ile bakın, `sudo prepper content remove …` ile yer açın veya daha büyük disk kullanın. |
+| "FAT32 biçimli" hatası | FAT32 4 GB'tan büyük dosya saklayamaz. Diski ext4 yapın (yukarıdaki USB SSD bölümü). |
+| Telefonda portal açılmıyor | **Mobil veriyi kapatın.** Android "İnternet yok" uyarısında "Bağlı kal"ı seçin; yoksa telefon trafiği mobil veriye yollar. Adresi elle yazın: `http://10.42.0.1/` (https değil). |
+| Wi-Fi ağı görünmüyor | `sudo prepper apply`; Ethernet yoksa ve ev Wi-Fi'ına bağlıysa `sudo reboot`. Kayıt: `journalctl -u NetworkManager -n 50` |
+| "Kütüphane hazır değil" sayfası | Kiwix başlıyor olabilir, 10 sn bekleyin. Sürerse: `journalctl -u kiwix-serve -n 30` |
+| Haritada yer adları yok | Yazı tipleri inmemiş: internet varken `sudo prepper maps install` tekrar. |
+| Harita sayfası "kütüphaneler eksik" diyor | İnternet varken `sudo prepper vendor`. |
+| Dosyalar bölümünde dosya açılmıyor (403) | Dosya izinleri: `sudo prepper apply` izinleri düzeltir. |
+| Pi yavaş / donuyor | Portaldaki "Güç uyarısı"na bakın: 5V/3A resmi adaptör ve kısa, kalın kablo kullanın. |
+
+`/etc/prepper.conf` içinde boşluk veya `$ ! "` gibi karakter içeren değerleri **tek tırnağa** alın:
+`WIFI_PASS='benim şifrem!'`
 
 ## İpuçları
 

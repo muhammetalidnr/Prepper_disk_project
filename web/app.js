@@ -47,6 +47,7 @@
           document.getElementById("search").hidden = true;
           return;
         }
+        document.getElementById("search").hidden = false;
         entries.forEach(function (en) {
           var get = function (n) { var x = en.getElementsByTagName(n)[0]; return x ? x.textContent : ""; };
           var href = "", icon = "";
@@ -76,7 +77,9 @@
       })
       .catch(function () {
         list.textContent = "";
-        list.appendChild(el("li", { class: "muted", text: "Kütüphane sunucusuna ulaşılamadı (kiwix-serve çalışıyor mu?)." }));
+        list.appendChild(el("li", { class: "muted", text: "Kütüphane şu an hazır değil (başlıyor olabilir). Biraz sonra sayfayı yenileyin; sürerse Pi'de: sudo prepper check" }));
+        document.getElementById("search").hidden = true;
+        setTimeout(loadBooks, 15000);
       });
   }
 
