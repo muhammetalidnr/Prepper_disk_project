@@ -8,6 +8,8 @@
 #   prepper content update             Kurulu içerikleri en yeni sürüme yükselt
 #   prepper maps install [BÖLGE|W,S,E,N] [MAXZOOM]
 #                                      Çevrimdışı harita indir (varsayılan: turkiye, z13)
+#   prepper wikipedia [resimli|resimsiz|ozet]
+#                                      Türkçe Wikipedia sürümünü kur
 #   prepper apply                      /etc/prepper.conf değişikliklerini uygula
 #
 set -euo pipefail
@@ -317,6 +319,7 @@ cmd_apply() {
     802-11-wireless.powersave 2 \
     ipv4.method shared ipv4.addresses "$AP_IP/24" ipv6.method disabled "${sec[@]}" >/dev/null
 
+  kiwix_env
   mkdir -p "$WEB_ROOT/maps"
   printf '{"lang":"%s"}\n' "$MAP_LANG" >"$WEB_ROOT/maps/config.json"
 
@@ -339,6 +342,51 @@ cmd_apply() {
 }
 
 # ---------------------------------------------------------------- Durum
+# ---------------------------------------------------------------- Wikipedia sürümü
+cmd_wikipedia() {
+  local variant=${1:-resimli} key k p other
+  case $variant in
+    resimli|maxi) key=wiki-tr-maxi ;;
+    resimsiz|nopic) key=wiki-tr-nopic ;;
+    ozet|özet|mini) key=wiki-tr-mini ;;
+    *) die "Kullanım: prepper wikipedia [resimli|resimsiz|ozet]" ;;
+  esac
+  cmd_content_install "$key"
+  # Aynı içeriğin başka bir sürümü de duruyorsa yer açma önerisi ver (otomatik silmez)
+  for k in wiki-tr-maxi wiki-tr-nopic wiki-tr-mini; do
+    [[ $k == "$key" ]] && continue
+    p=$(catalog_lookup "$k" | cut -d'|' -f2)
+    other=$(installed_for_prefix "$p" | tail -1)
+    [[ -n $other ]] && warn "Diğer sürüm de kurulu ($other). Yer açmak için: sudo prepper content remove $k"
+  done
+  return 0
+}
+
+# ---------------------------------------------------------------- Kiwix bellek ayarları
+# Resimli ZIM'lerde RAM'i asıl dolduran şey libzim'in açılmış küme (cluster) önbelleğidir.
+# libzim 8 bunu ZIM_CLUSTERCACHE ile küme SAYISI olarak alır (varsayılan 16; resimli
+# kümeler büyük olduğundan 1 GB'ta 8'e indiriyoruz). libzim 9+ ise bayt sınırlı ve
+# varsayılanı zaten 16 MB, bu değişkeni okumaz — o yüzden 9+'ta dokunmuyoruz.
+kiwix_env() {
+  local out=/etc/prepper/kiwix.env ver major mem_mb big=0
+  mkdir -p /etc/prepper
+  ver=$(/usr/local/bin/kiwix-serve --version 2>/dev/null | awk '/libzim/{print $NF; exit}')
+  major=${ver%%.*}
+  mem_mb=$(awk '/^MemTotal:/{print int($2/1024)}' /proc/meminfo)
+  (( mem_mb > 1536 )) && big=1
+  {
+    echo "# prepper apply tarafından üretildi (libzim ${ver:-?}, ${mem_mb} MB RAM)"
+    if [[ $major =~ ^[0-9]+$ ]]; then
+      (( major < 9 )) && echo "ZIM_CLUSTERCACHE=$(( big ? 16 : 8 ))"
+    fi
+    echo "ZIM_DIRENTCACHE=256"
+    echo "KIWIX_ARCHIVE_CACHE_SIZE=4"
+    echo "KIWIX_SEARCHER_CACHE_SIZE=2"
+    echo "KIWIX_SUGGESTION_SEARCHER_CACHE_SIZE=4"
+  } >"$out"
+  chmod 644 "$out"
+}
+
 cmd_status_short() {
   local n; n=$(find "$ZIM_DIR" -maxdepth 1 -name '*.zim' 2>/dev/null | wc -l)
   echo "Kurulu ZIM: $n   Boş alan: $(human "$(free_bytes "$DATA_DIR")")"
@@ -364,7 +412,7 @@ cmd_status() {
   shopt -u nullglob
 }
 
-usage() { sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; }
 
 main() {
   local cmd=${1:-help}; shift || true
@@ -384,6 +432,7 @@ main() {
       local sub=${1:-}; shift || true
       [[ $sub == install ]] || { usage; exit 1; }
       cmd_maps_install "$@" ;;
+    wikipedia) need_root wikipedia; cmd_wikipedia "$@" ;;
     apply) cmd_apply ;;
     library-ensure) cmd_library_ensure ;;
     help|-h|--help) usage ;;

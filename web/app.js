@@ -24,6 +24,13 @@
     return (d ? d + " g " : "") + (d || h ? h + " sa " : "") + m + " dk";
   }
 
+  // ZIM adından sürüm türü: wikipedia_tr_all_maxi_2026-10 -> "Resimli"
+  var VARIANTS = { maxi: "Resimli", nopic: "Resimsiz", mini: "Özet" };
+  function variantOf(name) {
+    var m = /_(maxi|nopic|mini)(_|$)/.exec(name || "");
+    return m ? VARIANTS[m[1]] : "";
+  }
+
   // --- Kiwix OPDS kataloğu -------------------------------------------------
   function loadBooks() {
     var list = document.getElementById("books");
@@ -50,13 +57,20 @@
           });
           var name = get("name");
           var title = get("title") || name;
+          // Kiwix sürümüne göre "name" tarih içermeyebilir; bağlantıdaki kitap kimliğine de bak
+          // Arama, ZIM adını değil dosya adından gelen kitap kimliğini ister (ör. wikipedia_tr_all_maxi_2026-10)
+          var bookId = href ? href.split("/").filter(Boolean).pop() : name;
+          var variant = variantOf(name) || variantOf(bookId);
           list.appendChild(el("li", {}, [
             el("a", { href: href || "/wiki/" }, [
               icon ? el("img", { src: icon, alt: "", loading: "lazy" }) : null,
-              el("span", {}, [el("div", { class: "t", text: title }), el("div", { class: "d", text: get("summary") })])
+              el("span", {}, [el("div", { class: "t" }, [
+                document.createTextNode(title),
+                variant ? el("span", { class: "badge", text: variant }) : null
+              ]), el("div", { class: "d", text: get("summary") })])
             ])
           ]));
-          if (name) select.appendChild(el("option", { value: name, text: title }));
+          if (bookId) select.appendChild(el("option", { value: bookId, text: title + (variant ? " (" + variant.toLowerCase() + ")" : "") }));
         });
         document.getElementById("t-zims").textContent = entries.length + " kaynak";
       })

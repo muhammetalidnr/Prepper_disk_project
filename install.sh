@@ -5,6 +5,7 @@
 #   sudo ./install.sh --content wiki-tr-nopic,wikimed-en --maps turkiye
 #
 # Seçenekler:
+#   --wikipedia SÜRÜM Türkçe Wikipedia: resimli | resimsiz | ozet
 #   --content K1,K2   Kurulumdan sonra bu içerikleri indir (liste: config/catalog.txt)
 #   --maps BÖLGE      Çevrimdışı harita indir (turkiye | istanbul | ankara | izmir | W,S,E,N)
 #   --no-tune         Bellek/SD kart optimizasyonlarını atla
@@ -19,14 +20,15 @@ MAPLIBRE_VER=5.24.0
 PMTILES_VER=4.4.1
 BASEMAPS_VER=5.7.2
 
-CONTENT=""; MAPS=""; TUNE=1; START_AP=0
+CONTENT=""; WIKI=""; MAPS=""; TUNE=1; START_AP=0
 while [[ $# -gt 0 ]]; do
   case $1 in
     --content) CONTENT=${2:?}; shift 2 ;;
+    --wikipedia) WIKI=${2:?}; shift 2 ;;
     --maps) MAPS=${2:?}; shift 2 ;;
     --no-tune) TUNE=0; shift ;;
     --start-ap) START_AP=1; shift ;;
-    -h|--help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Bilinmeyen seçenek: $1" >&2; exit 1 ;;
   esac
 done
@@ -185,6 +187,9 @@ EOF
 fi
 
 # ---------------------------------------------------------------- 5) İçerik (internet varken)
+if [[ -n $WIKI ]]; then
+  /usr/local/bin/prepper wikipedia "$WIKI" || warn "Wikipedia indirilemedi."
+fi
 if [[ -n $CONTENT ]]; then
   IFS=',' read -r -a keys <<<"$CONTENT"
   /usr/local/bin/prepper content install "${keys[@]}" || warn "Bazı içerikler indirilemedi."
@@ -206,7 +211,8 @@ cat <<EOF
 
   Sonraki adımlar (internet bağlantısı varken, tercihen Ethernet ile):
     sudo prepper content list
-    sudo prepper content install wiki-tr-nopic wikimed-en medicine-en
+    sudo prepper wikipedia resimli        # veya: resimsiz / ozet
+    sudo prepper content install wikimed-en medicine-en
     sudo prepper maps install turkiye
     sudo reboot
 EOF

@@ -42,7 +42,7 @@ sudo ./install.sh
 İçerik ve haritayı kurulumla birlikte indirmek için:
 
 ```bash
-sudo ./install.sh --content wiki-tr-nopic,wikimed-en,medicine-en,water-en --maps turkiye
+sudo ./install.sh --wikipedia resimli --content wikimed-en,medicine-en,water-en --maps turkiye
 sudo reboot
 ```
 
@@ -51,6 +51,27 @@ Yeniden başlattıktan sonra **PrepperPi** ağına bağlanın ve `http://10.42.0
 > **Pi'ye Wi-Fi üzerinden SSH ile bağlıysanız**: kurulum bağlantınızı koparmamak için erişim noktasını
 > hemen açmaz; `sudo reboot` sonrası açılır. Sonrasında Pi'ye PrepperPi ağına bağlanıp
 > `ssh <kullanıcı>@10.42.0.1` ile erişirsiniz. İnternet için Ethernet kablosu takın.
+
+## Resimli Wikipedia
+
+```bash
+sudo prepper wikipedia resimli     # resimli tam sürüm (~6–8 GB)
+sudo prepper wikipedia resimsiz    # tam metin, resimsiz (~2–3 GB)
+sudo prepper wikipedia ozet        # sadece giriş bölümleri (~0,5 GB)
+```
+
+Birden fazla sürüm aynı anda kurulabilir; portalda **Resimli / Resimsiz / Özet** etiketiyle ayrılır.
+Komut diğer sürüm de kuruluysa yer açmak için silme komutunu önerir, kendiliğinden silmez.
+
+Resimli sürüm 1 GB RAM'de şu sayede rahat çalışır:
+
+- **Resimler Pi'de işlenmez**: ZIM'de hazır sıkıştırılmış (WebP) durur, olduğu gibi gönderilir; açma ve
+  gösterme işini telefon yapar.
+- **Önbellek sınırı**: eski libzim 8 kullanan Kiwix'te açılmış veri önbelleği 8 kümeyle sınırlanır
+  (`/etc/prepper/kiwix.env`, `prepper apply` üretir). libzim 9+ zaten 16 MB ile sınırlıdır.
+- **nginx resimleri RAM'de veya SD kartta biriktirmez**, doğrudan aktarır (`proxy_max_temp_file_size 0`).
+- **Telefonlar resimleri 1 gün önbelleğe alır**: aynı sayfa tekrar açıldığında Pi'ye istek gitmez.
+- Kiwix servisi 650 MB ile sınırlıdır; en kötü durumda sistem değil yalnızca Kiwix yeniden başlar.
 
 ## İçerik yönetimi
 

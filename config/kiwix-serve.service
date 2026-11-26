@@ -7,6 +7,8 @@ RequiresMountsFor=@DATA_DIR@
 Type=simple
 User=prepper
 Group=prepper
+# Önbellek sınırları (prepper apply üretir) — resimli Wikipedia RAM'i şişirmesin
+EnvironmentFile=-/etc/prepper/kiwix.env
 ExecStartPre=/usr/local/bin/prepper library-ensure
 ExecStart=/usr/local/bin/kiwix-serve --address=127.0.0.1 --port=@KIWIX_PORT@ --urlRootLocation=/wiki --threads=2 --monitorLibrary --library @DATA_DIR@/library.xml
 Restart=on-failure
